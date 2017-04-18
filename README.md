@@ -10,7 +10,7 @@ These instructions will get you a copy of the project up and running on your loc
 ### Prerequisites
 Java
 
-Gradle (to build, otherwise grab a `.jar` from Releases
+Gradle (to build, otherwise grab a `.jar` from [Releases](https://github.com/haydenflinner/spreadsheet-mapping-tool/releases)
 
 Graphvis (sudo apt install graphviz)
 
