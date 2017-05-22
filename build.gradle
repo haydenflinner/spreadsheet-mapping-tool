@@ -1,9 +1,7 @@
 group 'me.flinner'
-version '1.0-SNAPSHOT'
+version '1.1-SNAPSHOT'
 
 apply plugin: 'java'
-
-sourceCompatibility = 1.8
 
 repositories {
     mavenCentral()
@@ -13,4 +11,22 @@ dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.12'
     compile group: 'org.apache.poi', name: 'poi', version: '3.9'
     compile group: 'org.apache.poi', name: 'poi-ooxml', version: '3.9'
+}
+
+jar {
+    from {
+
+        configurations.runtime.collect {
+            it.isDirectory() ? it : zipTree(it)
+        }
+
+        configurations.compile.collect {
+            it.isDirectory() ? it : zipTree(it)
+        }
+    }
+
+    manifest {
+        attributes 'Main-Class': 'Main'
+    }
+    exclude 'META-INF/*.RSA', 'META-INF/*.SF','META-INF/*.DSA'
 }
