@@ -1,5 +1,7 @@
 import org.apache.poi.ss.formula.FormulaParser;
 import org.apache.poi.ss.formula.ptg.Ptg;
+import org.apache.poi.ss.formula.ptg.Ref3DPtg;
+import org.apache.poi.ss.formula.ptg.Area3DPtg;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.ss.util.CellReference;
 import org.apache.poi.xssf.usermodel.XSSFEvaluationWorkbook;
@@ -30,41 +32,67 @@ public class Main {
 
     /** @return Cell dependencies for the active sheet translated to graph-viz dot language */
     private String translateSpreadsheetToDot() {
-        Sheet sheet = wb.getSheetAt(wb.getActiveSheetIndex());
         Map<String, List<String>> map = new Hashtable<>();
-
-        sheet.forEach(x -> x.forEach(c -> {
-            List<String> children = getCellReferences(c);
-            if (children != null) map.put(new CellReference(c).formatAsString(), children);
-        }));
-
         StringBuilder s = new StringBuilder("digraph G {\n");
-        map.forEach((key, value) -> value.forEach(cell -> s.append(key + " -> " + cell + ";\n")));
+        for (int i = 0; i < wb.getNumberOfSheets(); i++)
+        {
+            Sheet sheet = wb.getSheetAt(i);
+            sheet.forEach(r -> r.forEach(c -> {
+                List<String> children = getCellReferences(c);
+                if (children != null) map.put(getSheetPrefix(c) + new CellReference(c).formatAsString(), children);
+            }));
+        }
+        map.forEach((key, value) -> value.forEach(cell -> s.append("\"" + key + "\" -> \"" + cell + "\";\n")));
         s.append("}");
-
         return s.toString();
     }
 
     /**
      * @param c A cell.
-     * @return List of cells represented by this location/range, like [A4], [J7], or [A4, A5, A6].
+     * @return List of cells referenced by this location/range, like [A4], [J7], or [A4, A5, A6].
      */
     private List<String> getCellReferences(Cell c) {
         Ptg[] ptgs;
         try {
             ptgs = FormulaParser.parse(c.getCellFormula(), xssfew, c.getCellType(), 0);
-        } catch (Exception e) {
-            return null;
+        } catch (java.lang.IllegalStateException e) {
+            if (e.toString().contains("text cell") || e.toString().contains("numeric cell") ||
+                    e.toString().contains("blank cell")) return null;
+            else throw e;
         }
+
         List<String> returning = new ArrayList<>();
         for (Ptg p : ptgs) {
-            if (isRef(p)) {
-                String s = p.toFormulaString();
-                if (s.contains(":")) returning.addAll(getRange(s));
-                else returning.add(s);
+            String[] split = p.getClass().toString().split("\\.");
+            switch (split[split.length - 1]) {
+                case "RefPtg":
+                    returning.add(getSheetPrefix(c) + p.toFormulaString());
+                    break;
+                case "AreaPtg":
+                    getRange(p.toFormulaString()).forEach(str -> returning.add(getSheetPrefix(c) + str));
+                    break;
+                case "Ref3DPtg":
+                    Ref3DPtg p3d = (Ref3DPtg) p;
+                    String s = p3d.toFormulaString(xssfew);
+                    returning.add(s);
+                    break;
+                case "Area3DPtg":
+                    Area3DPtg a3d = (Area3DPtg) p;
+                    getRange(a3d.format2DRefAsString()).forEach(str -> returning.add(getSheetPrefix(c) + str));
+                    break;
+                default:
+                    break;
             }
         }
         return returning;
+    }
+
+    /**
+     * @param c a cell.
+     * @return The cell's prefix, probably something like "'Sheet #1'!"
+     */
+    private static String getSheetPrefix(Cell c) {
+        return "'" + c.getSheet().getSheetName() + "'!";
     }
 
 
@@ -84,21 +112,5 @@ public class Main {
             }
         }
         return returning;
-    }
-
-    /** @return Whether or not p was a cell reference. */
-    private static boolean isRef(Ptg p) {
-        String[] references = {"org.apache.poi.ss.formula.ptg.AreaPtg", "org.apache.poi.ss.formula.ptg.RefPtg"};
-        for (String ref : references) {
-            try {
-                if (p.getClass().equals(Class.forName(ref))) {
-                    return true;
-                }
-            } catch (ClassNotFoundException e) {
-                e.printStackTrace();
-                System.out.println(p.getClass());
-            }
-        }
-        return false;
     }
 }
